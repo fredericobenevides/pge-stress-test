@@ -2,6 +2,7 @@ package summary
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/fredericobenevides/pge-stress-test/internal/stresstest"
@@ -82,13 +83,19 @@ func (s *Summary) Calculate() SummaryData {
 func (s *Summary) Print() {
 	data := s.Calculate()
 
+	responseCount := data.totalRequests - data.totalErrors
+
 	fmt.Println("════════════════════ Stress Test Summary ════════════════════")
 	fmt.Printf("Duration:              %s\n", data.totalOperationDuration)
-	fmt.Printf("Requests:              %d\n", data.totalRequests)
-	fmt.Printf("Errors:                %d\n", data.totalErrors)
-	fmt.Printf("Attempted Throughput:  %.2f req/s\n", float64(data.totalRequests)/data.totalOperationDuration.Seconds())
-	fmt.Printf("Response Throughput :  %.2f req/s\n", data.responseThroughput)
-	fmt.Printf("2xx Throughput:        %.2f req/s\n", data.successThroughput)
+	fmt.Printf("Requests attempted:    %d\n", data.totalRequests)
+	fmt.Printf("HTTP responses:        %d\n", responseCount)
+	fmt.Printf("Transport errors:      %d\n", data.totalErrors)
+
+	fmt.Println()
+	fmt.Println("Throughput")
+	fmt.Printf("  Attempted:           %.2f req/s\n", data.attemptThroughput)
+	fmt.Printf("  Responses:           %.2f req/s\n", data.responseThroughput)
+	fmt.Printf("  Successful (2xx):    %.2f req/s\n", data.successThroughput)
 
 	fmt.Println()
 	fmt.Println("Latency")
@@ -98,11 +105,25 @@ func (s *Summary) Print() {
 
 	fmt.Println()
 	fmt.Println("HTTP status codes")
-	fmt.Println("  Status   Requests")
-	fmt.Println("  ------   --------")
+	fmt.Println("  Status   Requests   Rate")
+	fmt.Println("  ------   --------   ------")
 
-	for statusCode, count := range data.statusCodes {
-		fmt.Printf("  %-8d %d\n", statusCode, count)
+	statusCodes := make([]int, 0, len(data.statusCodes))
+	for statusCode := range data.statusCodes {
+		statusCodes = append(statusCodes, statusCode)
+	}
+
+	sort.Ints(statusCodes)
+
+	for _, statusCode := range statusCodes {
+		count := data.statusCodes[statusCode]
+
+		var rate float64
+		if responseCount > 0 {
+			rate = 100 * float64(count) / float64(responseCount)
+		}
+
+		fmt.Printf("  %-8d %-10d %.2f%%\n", statusCode, count, rate)
 	}
 
 	fmt.Println("══════════════════════════════════════════════════════════════")
