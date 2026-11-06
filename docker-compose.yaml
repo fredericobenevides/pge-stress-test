@@ -1,0 +1,28 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: ./cmd/server/main.go
+    container_name: pge-stress-server
+    ports:
+      - "8080:8080"
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_PATH: ./cmd/stresstest/main.go
+    container_name: pge-stress-client
+    command: 
+      --url=http://server:8080 
+      --requests=100000 
+      --concurrency=10
+    depends_on:
+      - server
+
+networks:
+  default:
+    name: pge-stress-test-network
