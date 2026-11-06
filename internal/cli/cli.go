@@ -36,9 +36,9 @@ to quickly create a Cobra application.`,
 		}
 
 		stressTest := stresstest.NewStressTest(config)
-		results := stressTest.Run()
+		operationDuration, results := stressTest.Run()
 
-		summary := summary.NewSummary(results)
+		summary := summary.NewSummary(operationDuration, results)
 		summary.Print()
 	},
 }

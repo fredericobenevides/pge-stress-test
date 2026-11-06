@@ -8,57 +8,102 @@ import (
 )
 
 type Summary struct {
-	results []stresstest.Result
+	totalOperationDuration time.Duration
+	results                []stresstest.Result
 }
 
 type SummaryData struct {
-	totalOperation time.Duration
-	totalRequests  int
-	totalErrors    int
-	statusCodes    map[int]int
+	totalRequests          int
+	totalErrors            int
+	statusCodes            map[int]int
+	totalOperationDuration time.Duration
+	attemptThroughput      float64
+	responseThroughput     float64
+	successThroughput      float64
+	minLatency             time.Duration
+	maxLatency             time.Duration
+	averageLatency         time.Duration
 }
 
-func NewSummary(results []stresstest.Result) *Summary {
+func NewSummary(operationDuration time.Duration, results []stresstest.Result) *Summary {
 	return &Summary{
-		results: results,
+		totalOperationDuration: operationDuration,
+		results:                results,
 	}
 }
 
 func (s *Summary) Calculate() SummaryData {
-	totalOperation := time.Duration(0)
 	totalRequests := 0
 	totalErrors := 0
 	statusCodes := make(map[int]int)
+	total2xxRequests := 0
+
+	var totalLatency time.Duration
+	var minLatency time.Duration
+	var maxLatency time.Duration
 
 	for _, result := range s.results {
 		totalRequests++
-		totalOperation += result.OperationTime
 		if result.Error != nil {
 			totalErrors++
 		} else {
 			statusCodes[result.StatusCode]++
 		}
+
+		if result.StatusCode >= 200 && result.StatusCode < 300 {
+			total2xxRequests++
+		}
+
+		if minLatency == 0 || result.OperationTime < minLatency {
+			minLatency = result.OperationTime
+		}
+
+		if result.OperationTime > maxLatency {
+			maxLatency = result.OperationTime
+		}
+
+		totalLatency += result.OperationTime
 	}
 
 	return SummaryData{
-		totalRequests:  totalRequests,
-		totalOperation: totalOperation,
-		totalErrors:    totalErrors,
-		statusCodes:    statusCodes,
+		totalRequests:          totalRequests,
+		totalErrors:            totalErrors,
+		statusCodes:            statusCodes,
+		totalOperationDuration: s.totalOperationDuration,
+		attemptThroughput:      float64(totalRequests) / s.totalOperationDuration.Seconds(),
+		responseThroughput:     float64(totalRequests-totalErrors) / s.totalOperationDuration.Seconds(),
+		successThroughput:      float64(total2xxRequests) / s.totalOperationDuration.Seconds(),
+		minLatency:             minLatency,
+		maxLatency:             maxLatency,
+		averageLatency:         totalLatency / time.Duration(totalRequests),
 	}
 }
 
 func (s *Summary) Print() {
-	summaryData := s.Calculate()
+	data := s.Calculate()
 
-	println("================================")
-	println("Total Operation Time:", summaryData.totalOperation.String())
-	println("Total Requests:", summaryData.totalRequests)
-	println("Total Errors:", summaryData.totalErrors)
-	println("Status Codes Received:")
-	println("\t Status | Total of Requests ")
-	for code, count := range summaryData.statusCodes {
-		fmt.Printf("\t    %d | %d  \n", code, count)
+	fmt.Println("════════════════════ Stress Test Summary ════════════════════")
+	fmt.Printf("Duration:              %s\n", data.totalOperationDuration)
+	fmt.Printf("Requests:              %d\n", data.totalRequests)
+	fmt.Printf("Errors:                %d\n", data.totalErrors)
+	fmt.Printf("Attempted Throughput:  %.2f req/s\n", float64(data.totalRequests)/data.totalOperationDuration.Seconds())
+	fmt.Printf("Response Throughput :  %.2f req/s\n", data.responseThroughput)
+	fmt.Printf("2xx Throughput:        %.2f req/s\n", data.successThroughput)
+
+	fmt.Println()
+	fmt.Println("Latency")
+	fmt.Printf("  Average:             %s\n", data.averageLatency)
+	fmt.Printf("  Minimum:             %s\n", data.minLatency)
+	fmt.Printf("  Maximum:             %s\n", data.maxLatency)
+
+	fmt.Println()
+	fmt.Println("HTTP status codes")
+	fmt.Println("  Status   Requests")
+	fmt.Println("  ------   --------")
+
+	for statusCode, count := range data.statusCodes {
+		fmt.Printf("  %-8d %d\n", statusCode, count)
 	}
-	println("================================")
+
+	fmt.Println("══════════════════════════════════════════════════════════════")
 }

@@ -23,7 +23,9 @@ func NewStressTest(config *Config) *StressTest {
 	}
 }
 
-func (s *StressTest) Run() []Result {
+func (s *StressTest) Run() (time.Duration, []Result) {
+	startTime := time.Now()
+
 	results := make([]Result, 0)
 	resultsCh := make(chan Result, s.config.requests)
 
@@ -43,7 +45,9 @@ func (s *StressTest) Run() []Result {
 		results = append(results, result)
 	}
 
-	return results
+	operationDuration := time.Since(startTime)
+
+	return operationDuration, results
 }
 
 func (s *StressTest) worker(wg *sync.WaitGroup, jobs <-chan struct{}, resultsCh chan<- Result) {
@@ -70,12 +74,12 @@ func (s *StressTest) sendRequestsToWorker(jobs chan<- struct{}) {
 }
 
 func (s *StressTest) makeRequest() Result {
-	startTime := time.Now()
+	latency := time.Now()
 
 	resp, err := http.Get(s.config.url)
 	if err != nil {
 		return Result{
-			OperationTime: time.Since(startTime),
+			OperationTime: time.Since(latency),
 			StatusCode:    0,
 			Error:         err,
 		}
@@ -84,7 +88,7 @@ func (s *StressTest) makeRequest() Result {
 	io.Copy(io.Discard, resp.Body)
 
 	return Result{
-		OperationTime: time.Since(startTime),
+		OperationTime: time.Since(latency),
 		StatusCode:    resp.StatusCode,
 		Error:         nil,
 	}
